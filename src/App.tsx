@@ -19,7 +19,10 @@ import { SpreadsheetAndAppsScriptView } from './components/SpreadsheetAndAppsScr
 import {
   initAuth,
   loadFullDatabaseFromSpreadsheet,
-  googleSignIn
+  googleSignIn,
+  loadPublicSnapshot,
+  writePublicSnapshot,
+  DEFAULT_PUBLIC_SHEET_ID
 } from './services/googleSheetsService';
 import { User } from 'firebase/auth';
 import { RefreshCw, ExternalLink } from 'lucide-react';
@@ -118,6 +121,8 @@ export default function App() {
       try {
         const { db: freshDb } = await loadFullDatabaseFromSpreadsheet(connectedSheetId, db);
         handleUpdateDatabase(freshDb);
+        // অ্যাডমিন লোড করলে সাধারণ ব্যবহারকারীদের জন্য পাবলিক কপিও হালনাগাদ হয়
+        if (isAdmin) writePublicSnapshot(connectedSheetId, normalizeDatabase(freshDb)).catch(() => undefined);
         const now = new Date();
         setLastSyncedAt(
           now.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -128,8 +133,32 @@ export default function App() {
         setIsAutoSyncing(false);
       }
     },
-    [accessToken, connectedSheetId, db, handleUpdateDatabase]
+    [accessToken, connectedSheetId, db, handleUpdateDatabase, isAdmin]
   );
+
+  // সাধারণ ব্যবহারকারী (অ্যাডমিন নন): শিটের পাবলিক কপি থেকে সর্বশেষ রোস্টার — সব ব্রাউজারে একই তথ্য
+  const isPublicMode = !(isAdmin && accessToken && connectedSheetId);
+  useEffect(() => {
+    if (!isPublicMode) return;
+    let cancelled = false;
+    const pull = async () => {
+      try {
+        const snap = await loadPublicSnapshot(connectedSheetId || DEFAULT_PUBLIC_SHEET_ID);
+        if (snap && !cancelled) {
+          handleUpdateDatabase(snap.db);
+          setLastSyncedAt(snap.savedAt ? new Date(snap.savedAt).toLocaleString('bn-BD') : null);
+        }
+      } catch {
+        // অফলাইন হলে আগের তথ্যই থাকবে
+      }
+    };
+    pull();
+    window.addEventListener('focus', pull);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', pull);
+    };
+  }, [isPublicMode, connectedSheetId, handleUpdateDatabase]);
 
   // Automatically pull changes from the linked Google Sheet on auth/sheet change AND whenever the user switches back to this browser tab
   useEffect(() => {
@@ -174,7 +203,7 @@ export default function App() {
     if (shouldPrint) {
       const timer = setTimeout(() => {
         window.print();
-      }, 900);
+      }, 2500);
       return () => clearTimeout(timer);
     }
   }, []);
