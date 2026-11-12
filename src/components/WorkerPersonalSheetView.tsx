@@ -12,23 +12,7 @@ import {
   toBengaliNumber
 } from '../data/rosterData';
 import { useA4Fit } from '../utils/a4Fit';
-import {
-  Coffee,
-  Sparkles,
-  DoorOpen,
-  CheckCircle2,
-  Utensils,
-  Droplets,
-  Fan,
-  ClipboardCheck,
-  Star,
-  Printer,
-  Footprints,
-  Trash2,
-  Trees,
-  GlassWater,
-  Wind
-} from 'lucide-react';
+import { Printer } from 'lucide-react';
 
 interface WorkerPersonalSheetViewProps {
   db: SpreadsheetDatabase;
@@ -36,47 +20,6 @@ interface WorkerPersonalSheetViewProps {
   onSelectWorkerSl: (sl: string) => void;
   enableWeeklySwap: boolean;
   onTriggerPrint: () => void;
-}
-
-const ICON_CLASS = 'w-[6mm] h-[6mm] text-black shrink-0';
-
-function iconByKey(iconKey: string) {
-  switch (iconKey) {
-    case 'broom':
-      return <Sparkles className={ICON_CLASS} />;
-    case 'coffee':
-      return <Coffee className={ICON_CLASS} />;
-    case 'sparkles':
-    case 'droplet':
-      return <Droplets className={ICON_CLASS} />;
-    case 'door':
-      return <DoorOpen className={ICON_CLASS} />;
-    case 'check':
-      return <CheckCircle2 className={ICON_CLASS} />;
-    case 'utensils':
-      return <Utensils className={ICON_CLASS} />;
-    case 'fan':
-      return <Fan className={ICON_CLASS} />;
-    default:
-      return <ClipboardCheck className={ICON_CLASS} />;
-  }
-}
-
-/** লেখা দেখে চিহ্ন বেছে নেওয়া (শিট থেকে আসা রুটিনের জন্য) */
-function iconByText(text: string) {
-  if (text.includes('নাস্তা')) return <Coffee className={ICON_CLASS} />;
-  if (text.includes('খাবার')) return <Utensils className={ICON_CLASS} />;
-  if (text.includes('রিপোর্ট')) return <ClipboardCheck className={ICON_CLASS} />;
-  if (text.includes('ছাদ')) return <Wind className={ICON_CLASS} />;
-  if (text.includes('এক্সজস্ট') || text.includes('★') || text.includes('ফ্যান')) return <Fan className={ICON_CLASS} />;
-  if (text.includes('ফিল্টার')) return <GlassWater className={ICON_CLASS} />;
-  if (text.includes('ডাস্টবিন')) return <Trash2 className={ICON_CLASS} />;
-  if (text.includes('সিঁড়ি')) return <Footprints className={ICON_CLASS} />;
-  if (text.includes('ওয়াশরুম') || text.includes('পানি দিয়ে')) return <Droplets className={ICON_CLASS} />;
-  if (text.includes('কক্ষ') || text.includes('অফিস') || text.includes('রুম')) return <DoorOpen className={ICON_CLASS} />;
-  if (text.includes('বাগান') || text.includes('প্রাঙ্গণ') || text.includes('চত্বর') || text.includes('ফটক')) return <Trees className={ICON_CLASS} />;
-  if (text.includes('দেখা')) return <CheckCircle2 className={ICON_CLASS} />;
-  return <Sparkles className={ICON_CLASS} />;
 }
 
 /** কক্ষ নম্বর হলে বড় অক্ষর, কক্ষের নাম (যেমন স্টাডি রুম, অফিস) হলে ছোট অক্ষর */
@@ -147,13 +90,11 @@ const RoutineTable: React.FC<{ rows: { timeBn: string; workBn: string; detailBn?
   <table>
     <colgroup>
       <col style={{ width: '35mm' }} />
-      <col style={{ width: '10mm' }} />
       <col />
     </colgroup>
     <thead>
       <tr>
         <th>সময়</th>
-        <th className="!text-center">চিহ্ন</th>
         <th>কাজ</th>
       </tr>
     </thead>
@@ -161,9 +102,6 @@ const RoutineTable: React.FC<{ rows: { timeBn: string; workBn: string; detailBn?
       {rows.map((r, i) => (
         <tr key={i} className={isBreakText(r.workBn) ? 'row-break' : ''}>
           <td className="font-bold text-[10pt]">{r.timeBn}</td>
-          <td>
-            <div className="flex justify-center">{r.iconKey ? iconByKey(r.iconKey) : iconByText(r.workBn)}</div>
-          </td>
           <td>
             <div className="font-bold text-[10.5pt] leading-snug">{r.workBn}</div>
             {r.detailBn && <div className="text-[9pt] leading-snug mt-[0.5mm]">{r.detailBn}</div>}
@@ -224,26 +162,6 @@ const FloorWorkerPages: React.FC<{ db: SpreadsheetDatabase; worker: StaffMember;
       {/* সামনের পিঠ */}
       <Page pageLabel="পৃষ্ঠা-১ (সামনের পিঠ)">
         <PageHeader db={db} worker={worker} subtitle="প্রতিদিনের কাজের সময়সূচি (সকাল ৭:৩০ – বিকাল ৪:৩০)" />
-        <div className="flex flex-wrap gap-[2mm] mb-[2.5mm] text-[9pt] font-bold">
-          <span className="inline-flex items-center gap-[1mm] border border-black px-[1.5mm] py-[0.5mm]">
-            <Sparkles className="w-[4.5mm] h-[4.5mm]" /> ঝাড়ু ও মোছা
-          </span>
-          <span className="inline-flex items-center gap-[1mm] border border-black px-[1.5mm] py-[0.5mm]">
-            <Droplets className="w-[4.5mm] h-[4.5mm]" /> ওয়াশরুম
-          </span>
-          <span className="inline-flex items-center gap-[1mm] border border-black px-[1.5mm] py-[0.5mm]">
-            <DoorOpen className="w-[4.5mm] h-[4.5mm]" /> কক্ষ
-          </span>
-          <span className="inline-flex items-center gap-[1mm] border border-black px-[1.5mm] py-[0.5mm]">
-            <CheckCircle2 className="w-[4.5mm] h-[4.5mm]" /> দেখা / জরুরি কাজ
-          </span>
-          <span className="inline-flex items-center gap-[1mm] border border-black px-[1.5mm] py-[0.5mm]">
-            <Star className="w-[4.5mm] h-[4.5mm] fill-black" /> ফ্যান ও জানালাসহ কক্ষ
-          </span>
-          <span className="inline-flex items-center gap-[1mm] border border-black px-[1.5mm] py-[0.5mm]">
-            <Coffee className="w-[4.5mm] h-[4.5mm]" /> বিরতি
-          </span>
-        </div>
         <RoutineTable rows={routineRows} />
         {split && <DayChangesTable changes={split.changes} />}
         <RuleBoxes db={db} worker={worker} />
