@@ -28,12 +28,14 @@ export const RoomDoorCardsView: React.FC<RoomDoorCardsViewProps> = ({
   const [roomSearch, setRoomSearch] = useState('');
 
   const { staffList } = db;
-  const allRoomsOnFloor = getRoomsForFloor(selectedFloor);
-  const filteredRooms = roomSearch.trim()
-    ? allRoomsOnFloor.filter((r) => r.toLowerCase().includes(roomSearch.trim().toLowerCase()))
-    : allRoomsOnFloor;
-
-  const regularCleaner = staffList.find((s) => s.floorKey === selectedFloor);
+  const floorsToRender = selectedFloor === 'ALL' ? ALL_FLOOR_KEYS : [selectedFloor];
+  const q = roomSearch.trim().toLowerCase();
+  const cards = floorsToRender.flatMap((floor) =>
+    getRoomsForFloor(floor)
+      .filter((r) => !q || r.toLowerCase().includes(q))
+      .map((roomNumber) => ({ floor, roomNumber }))
+  );
+  const filteredRooms = cards;
   useA4Fit([db, selectedFloor, roomSearch, enableWeeklySwap]);
 
   return (
@@ -53,6 +55,7 @@ export const RoomDoorCardsView: React.FC<RoomDoorCardsViewProps> = ({
             }}
             className="border border-neutral-400 bg-white px-3 py-2 text-base font-semibold text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
           >
+            <option value="ALL">সব তলা একত্রে</option>
             {ALL_FLOOR_KEYS.map((f) => (
               <option key={f} value={f}>
                 {getFloorNameBn(f)}
@@ -78,19 +81,20 @@ export const RoomDoorCardsView: React.FC<RoomDoorCardsViewProps> = ({
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-900 text-white text-base font-bold hover:bg-neutral-800 transition-colors cursor-pointer whitespace-nowrap shrink-0"
         >
           <Printer className="w-5 h-5" />
-          <span>এই তলার দরজার কার্ড প্রিন্ট / পিডিএফ সংরক্ষণ ({toBengaliNumber(filteredRooms.length)}টি কক্ষ)</span>
+          <span>{selectedFloor === 'ALL' ? 'সব তলার' : 'এই তলার'} দরজার কার্ড প্রিন্ট / পিডিএফ সংরক্ষণ ({toBengaliNumber(filteredRooms.length)}টি কক্ষ)</span>
         </button>
       </div>
 
       {/* দরজার কার্ড: প্রতিটি কক্ষ এক পাতা (A4) */}
       <div className="a4-stack">
-        {filteredRooms.map((roomNumber) => {
-          const schedule = getRoomDoorCardScheduleFromDb(selectedFloor, roomNumber, db, enableWeeklySwap);
-          const floorTitleBn = getFloorNameBn(selectedFloor);
+        {cards.map(({ floor, roomNumber }) => {
+          const schedule = getRoomDoorCardScheduleFromDb(floor, roomNumber, db, enableWeeklySwap);
+          const floorTitleBn = getFloorNameBn(floor);
+          const regularCleaner = staffList.find((s) => s.floorKey === floor);
           // গ্রাউন্ড ফ্লোরের কমন রুম প্রায় প্রতিদিন পরিষ্কার হয়, তাই সারি বেশি হলে ঘন (compact) সারি
           const compact = schedule.length > 8;
           return (
-            <section key={roomNumber} className="a4-page">
+            <section key={floor + '-' + roomNumber} className="a4-page">
               <div className="a4-fit">
                 <div className="flex items-stretch justify-between gap-[5mm] border-b-2 border-black pb-[3mm] mb-[3mm]">
                   <div className="min-w-0 flex flex-col justify-center">

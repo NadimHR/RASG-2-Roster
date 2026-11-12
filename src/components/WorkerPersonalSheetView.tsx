@@ -504,20 +504,28 @@ export const WorkerPersonalSheetView: React.FC<WorkerPersonalSheetViewProps> = (
         </button>
         <p className="w-full text-sm text-neutral-700">
           তলা, বাইরের এলাকা ও সহায়ক কর্মী: ১ কাগজের ২ পিঠ। রিলিভার: ১ পাতা (কোন বারে কার বদলি)। প্রিন্টের সময়
-          “Margins: None” ও “Scale: 100%” রাখুন।
+          Margins: Minimum ও Scale: 100% রাখুন। সব কর্মী একত্রে প্রিন্ট করলে Two-sided (Long edge) বেছে নিন — রিলিভারের পাতার পেছনে ফাঁকা পাতা দেওয়া আছে।
         </p>
       </div>
 
       <div className="a4-stack">
-        {workersToRender.map((worker) =>
-          worker.floorKey.startsWith('REL') ? (
-            <RelieverPages key={worker.sl} db={db} worker={worker} />
-          ) : isDayWiseWorker(worker) ? (
-            <PostWorkerPages key={worker.sl} db={db} worker={worker} />
-          ) : (
-            <FloorWorkerPages key={worker.sl} db={db} worker={worker} enableWeeklySwap={enableWeeklySwap} />
-          )
-        )}
+        {workersToRender.map((worker) => (
+          <React.Fragment key={worker.sl}>
+            {worker.floorKey.startsWith('REL') ? (
+              <RelieverPages db={db} worker={worker} />
+            ) : isDayWiseWorker(worker) ? (
+              <PostWorkerPages db={db} worker={worker} />
+            ) : (
+              <FloorWorkerPages db={db} worker={worker} enableWeeklySwap={enableWeeklySwap} />
+            )}
+            {/* দুই পিঠে প্রিন্টে পরের কর্মীর পাতা যেন নতুন কাগজে শুরু হয়: বিজোড় পাতা হলে একটি ফাঁকা পাতা */}
+            {workersToRender.length > 1 && pagesFor(worker) % 2 === 1 && (
+              <section className="a4-page blank-page">
+                <div className="a4-fit" />
+              </section>
+            )}
+          </React.Fragment>
+        ))}
       </div>
     </div>
   );
