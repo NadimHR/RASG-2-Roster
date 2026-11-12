@@ -220,6 +220,12 @@
   font-size: 7pt;
 }
 
+@media screen {
+  .a4-page.blank-page {
+    opacity: 0.35;
+  }
+}
+
 .a4-page .pg-no {
   position: absolute;
   right: 5mm;
