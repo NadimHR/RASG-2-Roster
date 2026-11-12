@@ -14,8 +14,10 @@ import {
   DayScheduleEntry,
   AuxiliaryTaskItem,
   RoleRoutineRow,
+  AssignmentHistoryRow,
   DEFAULT_ROLE_ROUTINES,
   DAY_BN_BY_EN,
+  toIsoDateLoose,
   ALL_FLOOR_KEYS,
   getFloorNameBn,
   getWorkerMonthlyScheduleFromDb,
@@ -251,7 +253,9 @@ export function buildWorkbookSheetsDataFromDb(
     ['doorCardInstructionBn', 'দরজার কার্ডে আবাসিক ছাত্রীদের প্রতি নির্দেশনা', notices.doorCardInstructionBn],
     ['workerMonthlyHeaderBn', 'কর্মীদের মাসিক শিডিউলের নিয়মিত দায়িত্বের বিবরণ', notices.workerMonthlyHeaderBn],
     ['maintenanceRuleBn', 'রক্ষণাবেক্ষণ ও উন্নয়ন কাজের তদারকি নিয়ম', notices.maintenanceRuleBn],
-    ['emergencyBackupRuleBn', 'আকস্মিক ছুটি বা অনুপস্থিতির বিকল্প পরিকল্পনা', notices.emergencyBackupRuleBn]
+    ['emergencyBackupRuleBn', 'আকস্মিক ছুটি বা অনুপস্থিতির বিকল্প পরিকল্পনা', notices.emergencyBackupRuleBn],
+    ['rosterStartDate', 'রোস্টার শুরুর তারিখ (YYYY-MM-DD)', `'${notices.rosterStartDate}`],
+    ['rosterEndDate', 'রোস্টার শেষের তারিখ (YYYY-MM-DD)', `'${notices.rosterEndDate}`]
   ];
 
   // 6. Worker_Personal_Schedules
@@ -260,7 +264,7 @@ export function buildWorkbookSheetsDataFromDb(
       'কর্মীর ক্রমিক (SL)',
       'কর্মীর নাম ও আইডি',
       'নিয়মিত দায়িত্বের সারাংশ',
-      'তারিখ (১৪ নভেম্বর – ১৩ ডিসেম্বর ২০২৬)',
+      'তারিখ',
       'বার',
       'সকাল ১১:৩০–০১:০০ (৩টি কক্ষ / কাজ)',
       'বিকাল ০৩:১০–০৪:০০ (★ ফ্যান ও জানালাসহ কক্ষ / কাজ)',
@@ -308,7 +312,7 @@ export function buildWorkbookSheetsDataFromDb(
   // 8. Role_Weekday_Routines (রিলিভার, বাইরের এলাকা, সহায়ক কর্মী, গ্রাউন্ড ও ১ম তলার বারভিত্তিক রুটিন)
   const roleRows: string[][] = [
     [
-      'পদের কোড (Role Key: G / 1 / EXT_FRONT / EXT_BACK / SQUAD_1 / SQUAD_2 / SQUAD_3)',
+      'পদের কোড (Role Key: G / 1 / EXT_FRONT / EXT_BACK / SQUAD_1 / SQUAD_2 / SQUAD_3 / REL / SUPERVISOR)',
       'বার (All = প্রতিদিন; নির্দিষ্ট বার লিখলে সেদিন ওই সময়ের কাজ বদলে যাবে)',
       'সময়',
       'কাজের বিবরণ'
@@ -321,6 +325,20 @@ export function buildWorkbookSheetsDataFromDb(
     ])
   ];
 
+  // 9. Assignment_History (আগের মেয়াদের দায়িত্ব — পালাবদলের পরামর্শে ব্যবহৃত)
+  const historyRows: string[][] = [
+    ['মেয়াদ শুরু', 'মেয়াদ শেষ', 'SL', 'Name', 'Employee ID', 'পদের কোড', 'দায়িত্ব'],
+    ...(db.assignmentHistory || []).map((h) => [
+      `'${h.periodStart}`,
+      `'${h.periodEnd}`,
+      String(h.sl),
+      h.name,
+      h.employeeId,
+      h.floorKey,
+      h.roleBn
+    ])
+  ];
+
   return [
     { title: 'Master_Staff_Roster', rows: staffRows },
     { title: 'Daily_Time_Routine', rows: routineRows },
@@ -329,7 +347,8 @@ export function buildWorkbookSheetsDataFromDb(
     { title: 'Official_Notices', rows: noticesRows },
     { title: 'Worker_Personal_Schedules', rows: workerScheduleRows },
     { title: 'PDF_Download_Links', rows: pdfLinkRows },
-    { title: 'Role_Weekday_Routines', rows: roleRows }
+    { title: 'Role_Weekday_Routines', rows: roleRows },
+    { title: 'Assignment_History', rows: historyRows }
   ];
 }
 
@@ -594,7 +613,8 @@ export async function loadFullDatabaseFromSpreadsheet(
     floorSchedules: { ...fallbackDb.floorSchedules },
     auxiliaryTasks: [...fallbackDb.auxiliaryTasks],
     notices: { ...fallbackDb.notices },
-    roleRoutines: [...(fallbackDb.roleRoutines || DEFAULT_ROLE_ROUTINES)]
+    roleRoutines: [...(fallbackDb.roleRoutines || DEFAULT_ROLE_ROUTINES)],
+    assignmentHistory: [...(fallbackDb.assignmentHistory || [])]
   };
 
   const fetchSheetRows = async (tabName: string, rangeCols = 'A1:Z1000'): Promise<string[][]> => {
@@ -975,6 +995,24 @@ export async function loadFullDatabaseFromSpreadsheet(
     if (parsed.length > 0) nextDb.roleRoutines = parsed;
   }
 
+  // 4c. Read Assignment_History
+  const rawHist = await fetchSheetRows('Assignment_History', 'A1:G2000');
+  if (rawHist.length > 1) {
+    const parsedHist: AssignmentHistoryRow[] = rawHist
+      .slice(1)
+      .filter((r) => String(r[0] || '').trim() && String(r[5] || '').trim())
+      .map((r) => ({
+        periodStart: toIsoDateLoose(String(r[0])) || String(r[0]).trim(),
+        periodEnd: toIsoDateLoose(String(r[1] || '')) || String(r[1] || '').trim(),
+        sl: Number(r[2]) || 0,
+        name: String(r[3] || '').trim(),
+        employeeId: String(r[4] || '').trim(),
+        floorKey: String(r[5]).trim(),
+        roleBn: String(r[6] || '').trim()
+      }));
+    nextDb.assignmentHistory = parsedHist;
+  }
+
   // ============================================================================
   // 5. Read Official_Notices
   // ============================================================================
@@ -985,7 +1023,8 @@ export async function loadFullDatabaseFromSpreadsheet(
       const key = String(r[0] || '').trim() as keyof typeof updatedNotices;
       const val = r[2];
       if (key && key in updatedNotices && val) {
-        updatedNotices[key] = val;
+        updatedNotices[key] =
+          key === 'rosterStartDate' || key === 'rosterEndDate' ? toIsoDateLoose(String(val)) || String(val) : val;
       }
     });
     nextDb.notices = updatedNotices;
