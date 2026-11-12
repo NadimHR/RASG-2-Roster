@@ -348,8 +348,107 @@ export function buildWorkbookSheetsDataFromDb(
     { title: 'Worker_Personal_Schedules', rows: workerScheduleRows },
     { title: 'PDF_Download_Links', rows: pdfLinkRows },
     { title: 'Role_Weekday_Routines', rows: roleRows },
-    { title: 'Assignment_History', rows: historyRows }
+    { title: 'Assignment_History', rows: historyRows },
+    { title: PUBLIC_SNAPSHOT_TAB, rows: buildPublicSnapshotRows(db) }
   ];
+}
+
+// ============================================================================
+// পাবলিক কপি: অ্যাডমিন সিঙ্ক করলে পুরো ডাটাবেস JSON আকারে একটি ট্যাবে রাখা হয়।
+// সাধারণ ব্যবহারকারীরা (লগইন ছাড়া) এই ট্যাব পড়ে হুবহু একই রোস্টার দেখেন।
+// শিটটি "Anyone with the link — Viewer" হিসেবে শেয়ার করা থাকতে হবে।
+// ============================================================================
+export const PUBLIC_SNAPSHOT_TAB = 'Public_Snapshot';
+export const DEFAULT_PUBLIC_SHEET_ID = '1vMtQifS7nDNXHq708Uq1FCOIwlaiNtn-nNDKKbOmcgw';
+const SNAPSHOT_CHUNK = 20000;
+
+function buildPublicSnapshotRows(db: SpreadsheetDatabase): string[][] {
+  const json = JSON.stringify({ v: 1, savedAt: new Date().toISOString(), db });
+  const rows: string[][] = [['পাবলিক কপি (স্বয়ংক্রিয়) — এই ট্যাবে কিছু লিখবেন না']];
+  for (let i = 0; i < json.length; i += SNAPSHOT_CHUNK) rows.push(['J:' + json.slice(i, i + SNAPSHOT_CHUNK)]);
+  return rows;
+}
+
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else q = false;
+      } else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') {
+      row.push(field);
+      field = '';
+    } else if (c === '\n') {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else if (c !== '\r') field += c;
+  }
+  if (field || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** লগইন ছাড়া পাবলিক কপি পড়া (শিট লিংক-শেয়ার করা থাকলে) */
+export async function loadPublicSnapshot(spreadsheetId: string): Promise<{ db: SpreadsheetDatabase; savedAt: string } | null> {
+  const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(
+    PUBLIC_SNAPSHOT_TAB
+  )}&headers=0&t=${Date.now()}`;
+  const res = await fetch(url, { credentials: 'omit', cache: 'no-store' });
+  if (!res.ok) return null;
+  const rows = parseCsv(await res.text());
+  const json = rows
+    .map((r) => (r[0] || '').trim())
+    .filter((c) => c.startsWith('J:'))
+    .map((c) => c.slice(2))
+    .join('');
+  if (!json) return null;
+  const parsed = JSON.parse(json);
+  if (!parsed?.db?.staffList?.length) return null;
+  return { db: parsed.db as SpreadsheetDatabase, savedAt: parsed.savedAt || '' };
+}
+
+/** অ্যাডমিন শিট থেকে লোড করার পর শুধু পাবলিক কপি হালনাগাদ করা */
+export async function writePublicSnapshot(spreadsheetId: string, db: SpreadsheetDatabase): Promise<void> {
+  const token = await getAccessToken();
+  if (!token) return;
+  const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`, {
+    headers: auth
+  });
+  if (!metaRes.ok) return;
+  const meta = await metaRes.json();
+  const has = (meta.sheets || []).some((x: { properties?: { title?: string } }) => x.properties?.title === PUBLIC_SNAPSHOT_TAB);
+  if (!has) {
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: PUBLIC_SNAPSHOT_TAB } } }] })
+    });
+  }
+  const range = encodeURIComponent(`'${PUBLIC_SNAPSHOT_TAB}'!A1:A200`);
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:clear`, {
+    method: 'POST',
+    headers: auth
+  });
+  await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
+      `'${PUBLIC_SNAPSHOT_TAB}'!A1`
+    )}?valueInputOption=RAW`,
+    { method: 'PUT', headers: auth, body: JSON.stringify({ values: buildPublicSnapshotRows(db) }) }
+  );
 }
 
 export async function initializeLinkedSpreadsheet(
