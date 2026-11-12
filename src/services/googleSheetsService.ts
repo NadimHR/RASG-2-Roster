@@ -970,6 +970,12 @@ export async function loadFullDatabaseFromSpreadsheet(
     });
     nextDb.floorSchedules = updatedFloors;
   }
+  // রবিবার ও বুধবার গ্রাউন্ড ফ্লোরের কর্মী ডাস্টবিন এলাকায় থাকেন, তাই সেদিন ★ কক্ষ নেই
+  if (nextDb.floorSchedules['G']) {
+    nextDb.floorSchedules['G'] = nextDb.floorSchedules['G'].map((d) =>
+      d.dayNameEn === 'Sunday' || d.dayNameEn === 'Wednesday' ? { ...d, starRoom: '' } : d
+    );
+  }
 
   // ============================================================================
   // 4b. Read Role_Weekday_Routines (বারভিত্তিক রুটিন)
@@ -992,7 +998,8 @@ export async function loadFullDatabaseFromSpreadsheet(
           workBn: String(r[3] || '').trim()
         };
       });
-    if (parsed.length > 0) nextDb.roleRoutines = parsed;
+    // পুরোনো সংস্করণের ট্যাব (SUPERVISOR সারি নেই) হলে অ্যাপের নতুন রুটিনই থাকবে; পরে সিঙ্ক করলে শিটে নতুন রুটিন লেখা হবে
+    if (parsed.length > 0 && parsed.some((r) => r.roleKey === 'SUPERVISOR')) nextDb.roleRoutines = parsed;
   }
 
   // 4c. Read Assignment_History
