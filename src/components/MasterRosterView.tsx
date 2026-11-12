@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import {
   SpreadsheetDatabase,
-  ROLE_SPECIFIC_DAILY_NOTES,
+  getRoleRoutineForDay,
+  ROLE_LABEL_BN,
   ALL_FLOOR_KEYS,
   getFloorNameBn,
   toBengaliNumber
 } from '../data/rosterData';
 import { Printer, Calendar, Users, CheckSquare, ShieldAlert } from 'lucide-react';
+import { MasterRosterPrint } from './MasterRosterPrint';
 
 interface MasterRosterViewProps {
   db: SpreadsheetDatabase;
@@ -29,7 +31,23 @@ export const MasterRosterView: React.FC<MasterRosterViewProps> = ({
   const floorMonthlyRows = floorSchedules[selectedScheduleFloor] || [];
 
   return (
-    <div className="space-y-8 print-flow">
+    <div className="space-y-8">
+      <div className="no-print flex flex-wrap items-center justify-between gap-3 bg-white border-2 border-black p-4">
+        <div className="text-sm">
+          <strong>মাস্টার রোস্টার প্রিন্ট প্যানেল:</strong> নিচের ছকটি A4 ল্যান্ডস্কেপ (আড়াআড়ি) ১ পাতায় প্রিন্ট হবে। মেয়াদ বদলাতে “মেয়াদ ও
+          দায়িত্বের পালাবদল” পাতা ব্যবহার করুন।
+        </div>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-bold hover:bg-neutral-800 cursor-pointer whitespace-nowrap"
+        >
+          <Printer className="w-4 h-4" />
+          <span>মাস্টার রোস্টার প্রিন্ট / পিডিএফ (A4 ল্যান্ডস্কেপ)</span>
+        </button>
+      </div>
+      <MasterRosterPrint db={db} />
+      <div className="no-print space-y-8">
       {/* Top Institutional Summary Banner */}
       <section className="bg-white border-2 border-black p-6">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-black pb-4 mb-4">
@@ -273,13 +291,13 @@ export const MasterRosterView: React.FC<MasterRosterViewProps> = ({
 
         {/* Role Specific Daily Schedules Summary */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          {Object.entries(ROLE_SPECIFIC_DAILY_NOTES).map(([key, item]) => (
+          {['G', '1', 'EXT_FRONT', 'EXT_BACK', 'SQUAD_1', 'SQUAD_2', 'SQUAD_3', 'SUPERVISOR'].map((key) => (
             <div key={key} className="border border-black p-3 bg-white">
               <div className="font-bold text-sm text-black border-b border-black pb-1.5 mb-2">
-                {item.titleBn}
+                {ROLE_LABEL_BN[key]} — প্রতিদিনের রুটিন (রবিবারের উদাহরণ)
               </div>
               <ul className="space-y-1 text-xs text-black">
-                {item.slotsOverrideBn.map((s, idx) => (
+                {getRoleRoutineForDay(db, key, 'Sunday').map((s, idx) => (
                   <li key={idx} className="cell-wrap">
                     <span className="font-bold">{s.timeBn}:</span> {s.workBn}
                   </li>
@@ -341,7 +359,7 @@ export const MasterRosterView: React.FC<MasterRosterViewProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-black pb-3 mb-4">
           <div>
             <h2 className="text-lg font-bold text-black">
-              ৫. তলাভিত্তিক মাসিক কক্ষ পরিষ্কার ও বদলি সূচি (১৪ নভেম্বর ২০২৬ – ১৩ ডিসেম্বর ২০২৬)
+              ৫. তলাভিত্তিক মাসিক কক্ষ পরিষ্কার ও বদলি সূচি ({notices.rosterPeriodBn})
             </h2>
             <p className="text-xs text-neutral-800">
               প্রতিদিনের ৩টি সাধারণ কক্ষ (১১:৩০–০১:০০) এবং ১টি ★ তারকা চিহ্নিত কক্ষ (০৩:১০–০৪:০০ ফ্যান ও জানালাসহ পরিষ্কার) ও কর্মরত কর্মী:
@@ -413,6 +431,7 @@ export const MasterRosterView: React.FC<MasterRosterViewProps> = ({
           </tbody>
         </table>
       </section>
+      </div>
     </div>
   );
 };

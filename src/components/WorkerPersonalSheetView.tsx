@@ -4,13 +4,11 @@ import {
   StaffMember,
   getWorkerMonthlyScheduleFromDb,
   getWorkerWeekPlan,
-  getPostRoutineForDay,
   getRoleRoutineForDay,
   getRoomColumnTimes,
   isDayWiseWorker,
   isFloorKey,
   isBreakText,
-  WeekdayPlan,
   toBengaliNumber
 } from '../data/rosterData';
 import { useA4Fit } from '../utils/a4Fit';
@@ -209,14 +207,15 @@ const FloorWorkerPages: React.FC<{ db: SpreadsheetDatabase; worker: StaffMember;
   enableWeeklySwap
 }) => {
   const isStandard = worker.floorKey !== 'G' && worker.floorKey !== '1';
-  const routineRows = isStandard
-    ? db.dailyRoutine.map((s) => ({
+  const split = isStandard ? null : splitRoutine(db, worker.floorKey, worker.weeklyOff);
+  const routineRows = split
+    ? split.baseRows
+    : db.dailyRoutine.map((s) => ({
         timeBn: s.timeRangeBn,
         workBn: s.titleBn,
         detailBn: s.detailsBn,
         iconKey: s.iconKey
-      }))
-    : getRoleRoutineForDay(db, worker.floorKey, 'All');
+      }));
   const monthly = getWorkerMonthlyScheduleFromDb(worker, db, enableWeeklySwap);
   const times = getRoomColumnTimes(db);
 
@@ -246,6 +245,7 @@ const FloorWorkerPages: React.FC<{ db: SpreadsheetDatabase; worker: StaffMember;
           </span>
         </div>
         <RoutineTable rows={routineRows} />
+        {split && <DayChangesTable changes={split.changes} />}
         <RuleBoxes db={db} worker={worker} />
       </Page>
 
@@ -301,7 +301,7 @@ const FloorWorkerPages: React.FC<{ db: SpreadsheetDatabase; worker: StaffMember;
                   {day.isWeeklyOff ? <span className="font-sans text-[10.5pt]">সাপ্তাহিক ছুটি</span> : day.morningRooms.join(' • ')}
                 </td>
                 <td className={roomCellClass(day.starRoom)}>
-                  {day.isWeeklyOff ? '—' : `★ ${day.starRoom.replace(/^★\s*/, '')}`}
+                  {day.isWeeklyOff || !day.starRoom ? '—' : `★ ${day.starRoom.replace(/^★\s*/, '')}`}
                 </td>
                 <td className="text-[8.5pt] !leading-[1.2]">
                   {day.isWeeklyOff
@@ -321,143 +321,216 @@ const FloorWorkerPages: React.FC<{ db: SpreadsheetDatabase; worker: StaffMember;
 };
 
 /* ------------------------------------------------------------------ */
-/* রিলিভার, বাইরের এলাকা ও সহায়ক কর্মী: সারাংশ + প্রতি বারের আলাদা পাতা     */
+/* রিলিভার: ১ পাতা — কোন বারে কার বদলি                                     */
 /* ------------------------------------------------------------------ */
 
-const DatesTable: React.FC<{ plan: WeekdayPlan; db: SpreadsheetDatabase }> = ({ plan, db }) => {
-  const floorPost = isFloorKey(plan.postKey);
-  const times = getRoomColumnTimes(db);
-  return (
-    <table className="mt-[3mm]">
-      <colgroup>
-        <col style={{ width: '27mm' }} />
-        {floorPost ? (
-          <>
-            <col />
-            <col style={{ width: '34mm' }} />
-          </>
-        ) : (
-          <col />
-        )}
-        <col style={{ width: '40mm' }} />
-      </colgroup>
-      <thead>
-        <tr className="text-[9.5pt]">
-          <th>তারিখ ({plan.dayBn})</th>
-          {floorPost ? (
-            <>
-              <th>
-                ৩টি কক্ষ <span className="font-normal text-[8.5pt]">({times.roomsBn})</span>
-              </th>
-              <th>
-                ★ কক্ষ <span className="font-normal text-[8.5pt]">({times.starBn})</span>
-              </th>
-            </>
-          ) : (
-            <th>এই দিনের বিশেষ কাজ</th>
-          )}
-          <th>সুপারভাইজারের স্বাক্ষর</th>
-        </tr>
-      </thead>
-      <tbody>
-        {plan.dates.map((d) => (
-          <tr key={d.dateIso + d.dayIndex}>
-            <td className="font-bold text-[11pt] h-[11mm]">{d.dateShortBn}</td>
-            {floorPost ? (
-              <>
-                <td className={roomCellClass(d.morningRooms.join(' '), true)}>{d.morningRooms.join(' • ')}</td>
-                <td className={roomCellClass(d.starRoom, true)}>★ {d.starRoom.replace(/^★\s*/, '')}</td>
-              </>
-            ) : (
-              <td className="text-[10pt]">{d.specialTaskBn}</td>
-            )}
-            <td />
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-};
+function relieverPageCount(db: SpreadsheetDatabase, w: StaffMember): number {
+  const plan = getWorkerWeekPlan(w, db);
+  return plan.some((p) => !p.isOff && !p.coveredStaff) ? 2 : 1;
+}
 
-const DayWiseWorkerPages: React.FC<{ db: SpreadsheetDatabase; worker: StaffMember }> = ({ db, worker }) => {
+const RelieverPages: React.FC<{ db: SpreadsheetDatabase; worker: StaffMember }> = ({ db, worker }) => {
   const plan = getWorkerWeekPlan(worker, db);
-  const workDays = plan.filter((p) => !p.isOff);
-  const isReliever = worker.floorKey.startsWith('REL_');
-  const totalPages = workDays.length + 1;
-
+  const freeDays = plan.filter((p) => !p.isOff && !p.coveredStaff);
+  const total = freeDays.length ? 2 : 1;
   return (
     <>
-      {/* সারাংশ পাতা */}
-      <Page pageLabel={`পৃষ্ঠা-১ / ${toBengaliNumber(totalPages)} (সাপ্তাহিক সারাংশ)`}>
-        <PageHeader db={db} worker={worker} subtitle="সাপ্তাহিক সারাংশ — কোন বারে কোথায় কাজ" />
-        <div className="box text-[11pt] font-bold mb-[3mm] bg-neutral-100">
-          যেদিন যে বার, সেদিন সেই বারের আলাদা পাতা দেখে কাজ করবেন। প্রতিটি বারের পাতায় সময় অনুযায়ী কাজ এবং এই মাসের
-          তারিখগুলো দেওয়া আছে।
+      <Page pageLabel={`পৃষ্ঠা-১ / ${toBengaliNumber(total)}`}>
+        <PageHeader db={db} worker={worker} subtitle="সাপ্তাহিক বদলি সূচি — কোন বারে কোন তলায় কার বদলি" />
+        <div className="box text-[11pt] font-bold mb-[3mm] bg-neutral-100 leading-snug">
+          যেদিন যাঁর সাপ্তাহিক ছুটি, সেদিন সকাল ৭:৩০-এ তাঁর তলায় গিয়ে ওই তলার কর্মীর পুরো রুটিন ও সেদিনের কক্ষ নম্বর অনুযায়ী
+          কাজ করবেন। কক্ষ নম্বর ওই তলার কর্মীর মাসিক সূচি ও কক্ষের দরজার কার্ডে দেওয়া আছে।
         </div>
         <table>
           <colgroup>
             <col style={{ width: '27mm' }} />
-            <col />
-            {isReliever && <col style={{ width: '45mm' }} />}
             <col style={{ width: '42mm' }} />
-            <col style={{ width: '14mm' }} />
+            <col />
+            <col style={{ width: '50mm' }} />
           </colgroup>
           <thead>
             <tr className="text-[9.5pt]">
               <th>বার</th>
               <th>কাজের স্থান</th>
-              {isReliever && <th>যাঁর ছুটিতে বদলি</th>}
-              <th>এই মাসের তারিখ</th>
-              <th className="!text-center">পাতা</th>
+              <th>যাঁর ছুটিতে বদলি</th>
+              <th>এই মেয়াদের তারিখ</th>
             </tr>
           </thead>
           <tbody>
-            {plan.map((p) => {
-              const pageNo = p.isOff ? '—' : toBengaliNumber(workDays.findIndex((w) => w.dayEn === p.dayEn) + 2);
-              return (
-                <tr key={p.dayEn} className={p.isOff ? 'row-off' : ''}>
-                  <td className="font-bold text-[12pt] h-[12mm]">{p.dayBn}</td>
-                  <td className="font-bold text-[11pt]">{p.postLabelBn}</td>
-                  {isReliever && <td className="text-[10pt]">{p.coveredStaff ? shortName(p.coveredStaff) : '—'}</td>}
-                  <td className="text-[9.5pt] leading-snug">{p.dates.map((d) => d.dateShortBn).join(', ')}</td>
-                  <td className="!text-center font-bold text-[12pt]">{pageNo}</td>
-                </tr>
-              );
-            })}
+            {plan.map((p) => (
+              <tr key={p.dayEn} className={p.isOff ? 'row-off' : ''}>
+                <td className="font-bold text-[13pt] h-[16mm]">{p.dayBn}</td>
+                <td className="font-bold text-[13pt]">{p.isOff ? 'সাপ্তাহিক ছুটি' : p.coveredStaff ? p.postLabelBn : 'সুপারভাইজারের নির্দেশে'}</td>
+                <td className="text-[11pt] font-semibold">
+                  {p.coveredStaff ? (
+                    <>
+                      {shortName(p.coveredStaff)}
+                      <div className="text-[8.5pt] font-normal">আইডি: {p.coveredStaff.employeeId}</div>
+                    </>
+                  ) : p.isOff ? '—' : 'কারও বদলি নেই (পৃষ্ঠা-২ দেখুন)'}
+                </td>
+                <td className="text-[9.5pt] leading-snug">{p.dates.map((d) => d.dateShortBn).join(', ')}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
         <RuleBoxes db={db} worker={worker} withBackup />
         <Signatures />
       </Page>
+      {freeDays.length > 0 && (
+        <Page pageLabel={`পৃষ্ঠা-২ / ${toBengaliNumber(total)}`}>
+          <PageHeader
+            db={db}
+            worker={worker}
+            subtitle={`যেদিন কারও বদলি নেই (${freeDays.map((d) => d.dayBn).join(', ')}) — সেদিনের সময়সূচি`}
+          />
+          <RoutineTable rows={getRoleRoutineForDay(db, 'REL', freeDays[0].dayEn)} />
+          <Signatures />
+        </Page>
+      )}
+    </>
+  );
+};
 
-      {/* প্রতিটি কর্মদিবসের আলাদা পাতা */}
-      {workDays.map((p, idx) => {
-        const routine = getPostRoutineForDay(db, p.postKey, p.dayEn).map((r) => ({ timeBn: r.timeBn, workBn: r.workBn }));
-        return (
-          <Page key={p.dayEn} pageLabel={`পৃষ্ঠা-${toBengaliNumber(idx + 2)} / ${toBengaliNumber(totalPages)} • ${p.dayBn}`}>
-            <div className="flex items-stretch gap-[4mm] border-b-2 border-black pb-[2.5mm] mb-[3mm]">
-              <div className="border-[3px] border-black px-[4mm] py-[1.5mm] flex flex-col justify-center text-center shrink-0 min-w-[46mm]">
-                <div className="text-[9pt] font-bold">আজ</div>
-                <div className="text-[24pt] font-bold leading-tight">{p.dayBn}</div>
-              </div>
-              <div className="min-w-0 flex flex-col justify-center">
-                <div className="text-[9pt] font-semibold">
-                  {worker.nameBn} • আইডি: <span className="font-mono-num">{worker.employeeId}</span>
-                </div>
-                <div className="text-[16pt] font-bold leading-tight font-serif-bn">কাজের স্থান: {p.postLabelBn}</div>
-                {p.coveredStaff && (
-                  <div className="text-[10.5pt] font-semibold mt-[0.5mm]">
-                    {shortName(p.coveredStaff)}-এর সাপ্তাহিক ছুটির দিনে তাঁর পুরো দায়িত্ব পালন করবেন।
-                  </div>
+/* ------------------------------------------------------------------ */
+/* বাইরের এলাকা ও সহায়ক কর্মী: ১ কাগজ, ২ পিঠ                                */
+/* ------------------------------------------------------------------ */
+
+const WORK_DAYS_EN = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const DAY_BN: Record<string, string> = {
+  Saturday: 'শনিবার', Sunday: 'রবিবার', Monday: 'সোমবার', Tuesday: 'মঙ্গলবার', Wednesday: 'বুধবার', Thursday: 'বৃহস্পতিবার', Friday: 'শুক্রবার'
+};
+
+function splitRoutine(db: SpreadsheetDatabase, key: string, offDay: string) {
+  const days = WORK_DAYS_EN.filter((d) => d !== offDay);
+  const perDay = days.map((d) => ({ dayEn: d, rows: getRoleRoutineForDay(db, key, d) }));
+  const base = getRoleRoutineForDay(db, key, '__none__');
+  const baseKeys = new Set(base.map((r) => r.timeBn + '|' + r.workBn));
+  const changes: { dayEn: string; timeBn: string; workBn: string }[] = [];
+  perDay.forEach(({ dayEn, rows }) =>
+    rows.forEach((r) => {
+      if (!baseKeys.has(r.timeBn + '|' + r.workBn)) changes.push({ dayEn, timeBn: r.timeBn, workBn: r.workBn });
+    })
+  );
+  // যে সময়ে সাধারণ কাজ নেই (শুধু বার অনুযায়ী কাজ), সেখানে মূল ছকে একটি নির্দেশক সারি
+  const baseRows: { timeBn: string; workBn: string }[] = [...base];
+  const uncovered = new Map<string, string>();
+  changes.forEach((c) => {
+    const everyDay = perDay.every((pd) => pd.rows.some((r) => r.timeBn === c.timeBn));
+    if (everyDay && !base.some((b) => b.timeBn === c.timeBn)) uncovered.set(c.timeBn, c.timeBn);
+  });
+  uncovered.forEach((t) => baseRows.push({ timeBn: t, workBn: 'বার অনুযায়ী কাজ — নিচের ছক দেখুন' }));
+  const toMin = (t: string) => {
+    const en = t.replace(/[০-৯]/g, (d) => String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
+    const m = en.match(/(\d{1,2})[:.](\d{2})/);
+    if (!m) return 9999;
+    let h = Number(m[1]);
+    if (h < 7) h += 12;
+    return h * 60 + Number(m[2]);
+  };
+  baseRows.sort((a, b) => toMin(a.timeBn) - toMin(b.timeBn));
+  return { baseRows, changes };
+}
+
+const DayChangesTable: React.FC<{ changes: { dayEn: string; timeBn: string; workBn: string }[] }> = ({ changes }) => {
+  // একই কাজ যে বারগুলোতে, সেগুলো একসাথে (যেমন রবিবার ও বুধবার)
+  const byDay = WORK_DAYS_EN.map((d) => ({ dayEn: d, rows: changes.filter((c) => c.dayEn === d) })).filter((g) => g.rows.length);
+  const groups: { days: string[]; rows: { timeBn: string; workBn: string }[] }[] = [];
+  byDay.forEach((g) => {
+    const sig = g.rows.map((r) => r.timeBn + r.workBn).join('|');
+    const found = groups.find((x) => x.rows.map((r) => r.timeBn + r.workBn).join('|') === sig);
+    if (found) found.days.push(g.dayEn);
+    else groups.push({ days: [g.dayEn], rows: g.rows });
+  });
+  if (!groups.length) return null;
+  return (
+    <>
+      <div className="text-[11pt] font-bold mt-[3mm] mb-[1.5mm]">বার অনুযায়ী পরিবর্তন (ওই সময়ে উপরের কাজের বদলে এই কাজ)</div>
+      <table>
+        <colgroup>
+          <col style={{ width: '27mm' }} />
+          <col style={{ width: '30mm' }} />
+          <col />
+        </colgroup>
+        <thead>
+          <tr className="text-[9.5pt]">
+            <th>বার</th>
+            <th>সময়</th>
+            <th>কাজ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.flatMap((g) =>
+            g.rows.map((r, i) => (
+              <tr key={g.days.join() + i}>
+                {i === 0 && (
+                  <td rowSpan={g.rows.length} className="font-bold text-[11pt]">
+                    {g.days.map((d) => DAY_BN[d]).join(' ও ')}
+                  </td>
                 )}
-                <div className="text-[9.5pt] mt-[0.5mm]">ডিউটি: সকাল ৭:৩০ – বিকাল ৪:৩০</div>
-              </div>
+                <td className="font-bold text-[9.5pt]">{r.timeBn}</td>
+                <td className="text-[9.5pt] font-semibold leading-snug">{r.workBn}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </>
+  );
+};
+
+const PostWorkerPages: React.FC<{ db: SpreadsheetDatabase; worker: StaffMember }> = ({ db, worker }) => {
+  const { baseRows, changes } = splitRoutine(db, worker.floorKey, worker.weeklyOff);
+  const monthly = getWorkerMonthlyScheduleFromDb(worker, db);
+  return (
+    <>
+      <Page pageLabel="পৃষ্ঠা-১ (সামনের পিঠ)">
+        <PageHeader db={db} worker={worker} subtitle="প্রতিদিনের কাজের সময়সূচি (সকাল ৭:৩০ – বিকাল ৪:৩০)" />
+        <RoutineTable rows={baseRows} />
+        <DayChangesTable changes={changes} />
+        <RuleBoxes db={db} worker={worker} />
+      </Page>
+
+      <Page pageLabel="পৃষ্ঠা-২ (পেছনের পিঠ)">
+        <div className="flex items-end justify-between gap-[4mm] border-b-2 border-black pb-[2mm] mb-[2.5mm]">
+          <div>
+            <div className="text-[9pt] font-semibold">তারিখ অনুযায়ী কাজ • {db.notices.rosterPeriodBn}</div>
+            <div className="text-[13pt] font-bold font-serif-bn">
+              {worker.nameBn} • আইডি: <span className="font-mono-num">{worker.employeeId}</span> • {worker.assignedRoleBn}
             </div>
-            <RoutineTable rows={routine} />
-            <DatesTable plan={p} db={db} />
-          </Page>
-        );
-      })}
+          </div>
+        </div>
+        <table>
+          <colgroup>
+            <col style={{ width: '8.5mm' }} />
+            <col style={{ width: '24mm' }} />
+            <col style={{ width: '22mm' }} />
+            <col />
+            <col style={{ width: '30mm' }} />
+          </colgroup>
+          <thead>
+            <tr className="text-[9pt]">
+              <th className="!text-center">দিন</th>
+              <th>তারিখ</th>
+              <th>বার</th>
+              <th>সেদিনের বিশেষ কাজ (বাকি সময় উপরের রুটিন)</th>
+              <th>সুপারভাইজারের স্বাক্ষর</th>
+            </tr>
+          </thead>
+          <tbody>
+            {monthly.map((d) => (
+              <tr key={d.dateIso} className={`${d.isWeeklyOff ? 'row-off' : ''} [&>td]:!py-[0.8mm] [&>td]:leading-tight`}>
+                <td className="!text-center !px-0 text-[9pt]">{toBengaliNumber(d.dayIndex)}</td>
+                <td className="font-bold text-[10pt]">{d.dateShortBn}</td>
+                <td className="text-[9pt]">{d.dayNameBn}</td>
+                <td className="text-[9.5pt] font-semibold">{d.isWeeklyOff ? 'সাপ্তাহিক ছুটি' : d.specialTaskBn}</td>
+                <td />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <Signatures />
+      </Page>
     </>
   );
 };
@@ -475,8 +548,7 @@ export const WorkerPersonalSheetView: React.FC<WorkerPersonalSheetViewProps> = (
   const workersToRender =
     selectedWorkerSl === 'ALL' ? staffList : staffList.filter((s) => String(s.sl) === selectedWorkerSl);
 
-  const pagesFor = (w: StaffMember) =>
-    isDayWiseWorker(w) ? getWorkerWeekPlan(w, db).filter((p) => !p.isOff).length + 1 : 2;
+  const pagesFor = (w: StaffMember) => (w.floorKey.startsWith('REL') ? relieverPageCount(db, w) : 2);
   const totalPages = staffList.reduce((n, w) => n + pagesFor(w), 0);
 
   useA4Fit([db, selectedWorkerSl, enableWeeklySwap]);
@@ -513,15 +585,17 @@ export const WorkerPersonalSheetView: React.FC<WorkerPersonalSheetViewProps> = (
           <span>প্রিন্ট / পিডিএফ (A4)</span>
         </button>
         <p className="w-full text-sm text-neutral-700">
-          তলার কর্মী: ১ কাগজের ২ পিঠ। রিলিভার, বাইরের এলাকা ও সহায়ক কর্মী: ১ পাতা সাপ্তাহিক সারাংশ + প্রতিটি কর্মদিবসের
-          আলাদা পাতা। প্রিন্টের সময় “Margins: None/Default” ও “Scale: 100%” রাখুন।
+          তলা, বাইরের এলাকা ও সহায়ক কর্মী: ১ কাগজের ২ পিঠ। রিলিভার: ১ পাতা (কোন বারে কার বদলি)। প্রিন্টের সময়
+          “Margins: None” ও “Scale: 100%” রাখুন।
         </p>
       </div>
 
       <div className="a4-stack">
         {workersToRender.map((worker) =>
-          isDayWiseWorker(worker) ? (
-            <DayWiseWorkerPages key={worker.sl} db={db} worker={worker} />
+          worker.floorKey.startsWith('REL') ? (
+            <RelieverPages key={worker.sl} db={db} worker={worker} />
+          ) : isDayWiseWorker(worker) ? (
+            <PostWorkerPages key={worker.sl} db={db} worker={worker} />
           ) : (
             <FloorWorkerPages key={worker.sl} db={db} worker={worker} enableWeeklySwap={enableWeeklySwap} />
           )
