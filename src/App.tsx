@@ -9,6 +9,7 @@ import {
   normalizeDatabase
 } from './data/rosterData';
 import { SupervisorView } from './components/SupervisorView';
+import { AdminLogin, readAdminSession, clearAdminSession } from './components/AdminLogin';
 import { PeriodRotationView } from './components/PeriodRotationView';
 import { MasterRosterView } from './components/MasterRosterView';
 import { WorkerPersonalSheetView } from './components/WorkerPersonalSheetView';
@@ -46,6 +47,7 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('master');
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => readAdminSession());
   const [selectedWorkerSl, setSelectedWorkerSl] = useState<string>('1');
   const [selectedDoorFloor, setSelectedDoorFloor] = useState<string>('2');
   const [enableWeeklySwap, setEnableWeeklySwap] = useState<boolean>(false);
@@ -336,6 +338,26 @@ export default function App() {
 
         {/* Zone 3: 1 primary action button */}
         <div className="flex items-center gap-3 shrink-0">
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={() => {
+                clearAdminSession();
+                setIsAdmin(false);
+              }}
+              className="px-3 py-2 text-xs font-bold border border-black bg-white hover:bg-neutral-100 cursor-pointer whitespace-nowrap"
+            >
+              অ্যাডমিন (লগআউট)
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setActiveTab('rotation')}
+              className="px-3 py-2 text-xs font-bold border border-black bg-white hover:bg-neutral-100 cursor-pointer whitespace-nowrap"
+            >
+              অ্যাডমিন লগইন
+            </button>
+          )}
           <button
             type="button"
             onClick={() => syncFromGoogleSheetNow(true)}
@@ -473,6 +495,7 @@ export default function App() {
             db={db}
             enableWeeklySwap={enableWeeklySwap}
             onToggleWeeklySwap={handleToggleWeeklySwap}
+            isAdmin={isAdmin}
             onOpenWorkerSchedule={(sl) => {
               setSelectedWorkerSl(String(sl));
               setActiveTab('worker');
@@ -506,7 +529,14 @@ export default function App() {
 
         {activeTab === 'supervisor' && <SupervisorView db={db} />}
 
-        {activeTab === 'rotation' && <PeriodRotationView db={db} onUpdateDatabase={handleUpdateDatabase} />}
+        {(activeTab === 'rotation' || activeTab === 'database') && !isAdmin && (
+          <AdminLogin
+            featureBn={activeTab === 'rotation' ? 'মেয়াদ ও দায়িত্বের পালাবদল' : 'স্প্রেডশিট সংযোগ ও সিঙ্ক'}
+            onSuccess={() => setIsAdmin(true)}
+          />
+        )}
+
+        {activeTab === 'rotation' && isAdmin && <PeriodRotationView db={db} onUpdateDatabase={handleUpdateDatabase} />}
 
         {activeTab === 'pdf_links' && (
           <PdfLinksSheetView
@@ -515,7 +545,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'database' && (
+        {activeTab === 'database' && isAdmin && (
           <SpreadsheetAndAppsScriptView
             db={db}
             onUpdateDatabase={handleUpdateDatabase}
