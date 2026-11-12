@@ -124,9 +124,9 @@
 }
 
 .a4-page {
-  width: 210mm;
-  height: 297mm;
-  padding: 9mm 10mm;
+  width: 198mm;
+  height: 285mm;
+  padding: 4mm 5mm;
   background: #ffffff;
   color: #000000;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
@@ -180,9 +180,9 @@
 }
 
 .a4-landscape {
-  width: 297mm;
-  height: 210mm;
-  padding: 7mm 8mm;
+  width: 285mm;
+  height: 198mm;
+  padding: 3mm 4mm;
 }
 
 .master-grid {
@@ -222,16 +222,17 @@
 
 .a4-page .pg-no {
   position: absolute;
-  right: 10mm;
-  bottom: 4mm;
-  font-size: 8pt;
+  right: 5mm;
+  bottom: 1.2mm;
+  font-size: 7.5pt;
 }
 
 /* প্রিন্টের নিয়ম: সব গ্রে-স্কেল, প্রতিটি .a4-page একটি করে কাগজ */
 @media print {
+  /* প্রিন্টারের ন্যূনতম মার্জিন (৬ মিমি) বাদ দিয়ে পাতা — Margins: Default/Minimum/None যেকোনোটিতে এক পাতায় ধরবে */
   @page {
-    size: A4;
-    margin: 0;
+    size: A4 portrait;
+    margin: 6mm;
   }
 
   html,
@@ -263,13 +264,13 @@
 
   @page landscape {
     size: A4 landscape;
-    margin: 0;
+    margin: 6mm;
   }
 
   .a4-landscape {
     page: landscape;
-    width: 297mm !important;
-    height: 209.5mm !important;
+    width: 285mm !important;
+    height: 197.5mm !important;
   }
 
   .print-only {
@@ -283,7 +284,8 @@
   }
 
   .a4-page {
-    height: 296.5mm;
+    height: 284.5mm;
+    overflow: hidden;
     margin: 0 !important;
     box-shadow: none !important;
     break-after: page;
