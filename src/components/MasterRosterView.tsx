@@ -14,6 +14,7 @@ interface MasterRosterViewProps {
   db: SpreadsheetDatabase;
   enableWeeklySwap: boolean;
   onToggleWeeklySwap: (val: boolean) => void;
+  isAdmin?: boolean;
   onOpenWorkerSchedule: (sl: number) => void;
   onOpenFloorDoorCards: (floorKey: string) => void;
 }
@@ -22,6 +23,7 @@ export const MasterRosterView: React.FC<MasterRosterViewProps> = ({
   db,
   enableWeeklySwap,
   onToggleWeeklySwap,
+  isAdmin,
   onOpenWorkerSchedule,
   onOpenFloorDoorCards
 }) => {
@@ -64,7 +66,7 @@ export const MasterRosterView: React.FC<MasterRosterViewProps> = ({
           </div>
 
           <div className="no-print flex flex-wrap items-center gap-3">
-            <label className="inline-flex items-center gap-2 border border-black px-3 py-2 bg-neutral-100 text-xs font-bold text-black cursor-pointer">
+            {isAdmin && <label className="inline-flex items-center gap-2 border border-black px-3 py-2 bg-neutral-100 text-xs font-bold text-black cursor-pointer">
               <input
                 type="checkbox"
                 checked={enableWeeklySwap}
@@ -72,7 +74,7 @@ export const MasterRosterView: React.FC<MasterRosterViewProps> = ({
                 className="w-4 h-4 accent-black"
               />
               <span>সাপ্তাহিক দায়িত্ব সমন্বয় রোটেশন</span>
-            </label>
+            </label>}
 
             <button
               type="button"

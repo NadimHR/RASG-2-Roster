@@ -210,6 +210,13 @@ export const RoomDoorCardsView: React.FC<RoomDoorCardsViewProps> = ({
                   <span>ছাত্রী অনুপস্থিত থাকার কারণে পরিষ্কার না হলে “পরবর্তী তারিখ” ঘর পূরণ করতে হবে না।</span>
                   <span className="shrink-0">হল প্রশাসন, RASG-2</span>
                 </div>
+
+                <div className="mt-[3mm] border-2 border-black bg-neutral-100 px-[3mm] py-[1.8mm] text-center">
+                  <div className="text-[11.5pt] font-bold">
+                    This is a Pilot Project for the Enhancement of Cleanliness and Other Services
+                  </div>
+                  <div className="text-[10pt] font-bold">পরিচ্ছন্নতা ও অন্যান্য সেবার মানোন্নয়নে এটি একটি পাইলট প্রকল্প</div>
+                </div>
               </div>
             </section>
           );
