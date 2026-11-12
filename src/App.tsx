@@ -5,8 +5,11 @@ import {
   PdfDownloadLinkItem,
   generateFloorMonthlySchedule,
   ALL_FLOOR_KEYS,
-  toBengaliNumber
+  toBengaliNumber,
+  normalizeDatabase
 } from './data/rosterData';
+import { SupervisorView } from './components/SupervisorView';
+import { PeriodRotationView } from './components/PeriodRotationView';
 import { MasterRosterView } from './components/MasterRosterView';
 import { WorkerPersonalSheetView } from './components/WorkerPersonalSheetView';
 import { RoomDoorCardsView } from './components/RoomDoorCardsView';
@@ -20,9 +23,9 @@ import {
 import { User } from 'firebase/auth';
 import { RefreshCw, ExternalLink } from 'lucide-react';
 
-type ActiveTab = 'master' | 'worker' | 'doors' | 'pdf_links' | 'database';
+type ActiveTab = 'master' | 'worker' | 'doors' | 'supervisor' | 'rotation' | 'pdf_links' | 'database';
 
-const LOCAL_STORAGE_DB_KEY = 'rasg2_roster_full_db_v3';
+const LOCAL_STORAGE_DB_KEY = 'rasg2_roster_full_db_v4';
 const LOCAL_STORAGE_SHEET_ID_KEY = 'rasg2_connected_sheet_id_v1';
 const LOCAL_STORAGE_SHEET_URL_KEY = 'rasg2_connected_sheet_url_v1';
 
@@ -33,20 +36,20 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && Array.isArray(parsed.staffList) && parsed.staffList.length > 0) {
-          return parsed;
+          return normalizeDatabase(parsed);
         }
       }
     } catch {
       // ignore storage error
     }
-    return createInitialSpreadsheetDatabase();
+    return normalizeDatabase(createInitialSpreadsheetDatabase());
   });
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('master');
   const [selectedWorkerSl, setSelectedWorkerSl] = useState<string>('1');
   const [selectedDoorFloor, setSelectedDoorFloor] = useState<string>('2');
   const [enableWeeklySwap, setEnableWeeklySwap] = useState<boolean>(false);
-  const [grayscalePreview, setGrayscalePreview] = useState<boolean>(true);
+  const [grayscalePreview, setGrayscalePreview] = useState<boolean>(false);
   const [isAutoSyncing, setIsAutoSyncing] = useState<boolean>(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
@@ -61,7 +64,8 @@ export default function App() {
     return localStorage.getItem(LOCAL_STORAGE_SHEET_URL_KEY) || '';
   });
 
-  const handleUpdateDatabase = useCallback((updated: SpreadsheetDatabase) => {
+  const handleUpdateDatabase = useCallback((incoming: SpreadsheetDatabase) => {
+    const updated = normalizeDatabase(incoming);
     setDb(updated);
     try {
       localStorage.setItem(LOCAL_STORAGE_DB_KEY, JSON.stringify(updated));
@@ -155,6 +159,10 @@ export default function App() {
       if (floorParam) setSelectedDoorFloor(floorParam);
     } else if (viewParam === 'master') {
       setActiveTab('master');
+    } else if (viewParam === 'supervisor') {
+      setActiveTab('supervisor');
+    } else if (viewParam === 'rotation') {
+      setActiveTab('rotation');
     } else if (viewParam === 'links') {
       setActiveTab('pdf_links');
     } else if (viewParam === 'database') {
@@ -164,7 +172,7 @@ export default function App() {
     if (shouldPrint) {
       const timer = setTimeout(() => {
         window.print();
-      }, 450);
+      }, 900);
       return () => clearTimeout(timer);
     }
   }, []);
@@ -182,7 +190,7 @@ export default function App() {
   };
 
   const handleResetDefaultDatabase = () => {
-    const initial = createInitialSpreadsheetDatabase();
+    const initial = normalizeDatabase(createInitialSpreadsheetDatabase());
     setDb(initial);
     try {
       localStorage.removeItem(LOCAL_STORAGE_DB_KEY);
@@ -211,13 +219,15 @@ export default function App() {
     } else if (item.actionType === 'worker') {
       setSelectedWorkerSl(item.targetId);
       setActiveTab('worker');
+    } else if (item.actionType === 'supervisor') {
+      setActiveTab('supervisor');
     } else if (item.actionType === 'floor_doors') {
       setSelectedDoorFloor(item.targetId);
       setActiveTab('doors');
     }
     setTimeout(() => {
       window.print();
-    }, 250);
+    }, 600);
   };
 
   return (
@@ -273,6 +283,30 @@ export default function App() {
             }`}
           >
             রুমের দরজার কার্ড
+          </a>
+          <a
+            href="#supervisor"
+            onClick={(e) => {
+              e.preventDefault();
+              setActiveTab('supervisor');
+            }}
+            className={`hover:text-black hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 ${
+              activeTab === 'supervisor' ? 'text-black underline font-bold' : ''
+            }`}
+          >
+            সুপারভাইজার
+          </a>
+          <a
+            href="#rotation"
+            onClick={(e) => {
+              e.preventDefault();
+              setActiveTab('rotation');
+            }}
+            className={`hover:text-black hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 ${
+              activeTab === 'rotation' ? 'text-black underline font-bold' : ''
+            }`}
+          >
+            মেয়াদ ও পালাবদল
           </a>
           <a
             href="#pdf-links"
@@ -350,12 +384,30 @@ export default function App() {
             </button>
             <button
               type="button"
+              onClick={() => setActiveTab('supervisor')}
+              className={`px-3 py-1.5 text-xs font-bold border border-black cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === 'supervisor' ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+              }`}
+            >
+              ৪. সুপারভাইজারের রুটিন
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('rotation')}
+              className={`px-3 py-1.5 text-xs font-bold border border-black cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === 'rotation' ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+              }`}
+            >
+              ৫. মেয়াদ ও দায়িত্বের পালাবদল
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('pdf_links')}
               className={`px-3 py-1.5 text-xs font-bold border border-black cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'pdf_links' ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
               }`}
             >
-              ৪. সব পিডিএফ ডাউনলোড লিংক শিট
+              ৬. সব পিডিএফ ডাউনলোড লিংক শিট
             </button>
             <button
               type="button"
@@ -364,7 +416,7 @@ export default function App() {
                 activeTab === 'database' ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
               }`}
             >
-              ৫. সংযুক্ত স্প্রেডশিট (পরিবর্তন ও সিঙ্ক)
+              ৭. সংযুক্ত স্প্রেডশিট (পরিবর্তন ও সিঙ্ক)
             </button>
           </div>
 
@@ -451,6 +503,10 @@ export default function App() {
             onTriggerPrint={() => window.print()}
           />
         )}
+
+        {activeTab === 'supervisor' && <SupervisorView db={db} />}
+
+        {activeTab === 'rotation' && <PeriodRotationView db={db} onUpdateDatabase={handleUpdateDatabase} />}
 
         {activeTab === 'pdf_links' && (
           <PdfLinksSheetView

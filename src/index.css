@@ -34,8 +34,10 @@
   line-height: 1.45;
 }
 
-.grayscale-preview {
-  filter: grayscale(100%);
+@media screen {
+  .grayscale-preview {
+    filter: grayscale(100%);
+  }
 }
 
 /* Google Sign-In Material Button Styling */
@@ -177,6 +179,47 @@
   padding: 2mm 2.6mm;
 }
 
+.a4-landscape {
+  width: 297mm;
+  height: 210mm;
+  padding: 7mm 8mm;
+}
+
+.master-grid {
+  font-size: 8pt;
+  line-height: 1.2;
+}
+
+.master-grid .grid-table th,
+.master-grid .grid-table td {
+  padding: 0.55mm 0.8mm;
+  font-size: 7.6pt;
+  height: 5.3mm;
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.master-grid .grid-table td.off {
+  background: #9a9a9a;
+  color: #fff;
+  font-weight: 700;
+}
+
+.master-grid .grid-table td.cover {
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.master-grid .grid-table .fri {
+  background: #e6e6e6;
+}
+
+.master-grid .grid-table tr.extra td {
+  background: #f2f2f2;
+  font-size: 7pt;
+}
+
 .a4-page .pg-no {
   position: absolute;
   right: 10mm;
@@ -195,7 +238,7 @@
   body {
     background: #ffffff !important;
     color: #000000 !important;
-    filter: grayscale(100%) !important;
+    filter: none !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     margin: 0 !important;
@@ -212,6 +255,23 @@
     display: none !important;
   }
 
+  /* filter লেখাকে ছবিতে রূপান্তর করে ফেলে — প্রিন্টে কোনো filter নয় (রং এমনিতেই সাদা-কালো) */
+  .grayscale-preview,
+  .grayscale-preview * {
+    filter: none !important;
+  }
+
+  @page landscape {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  .a4-landscape {
+    page: landscape;
+    width: 297mm !important;
+    height: 209.5mm !important;
+  }
+
   .print-only {
     display: block !important;
   }
@@ -223,6 +283,7 @@
   }
 
   .a4-page {
+    height: 296.5mm;
     margin: 0 !important;
     box-shadow: none !important;
     break-after: page;
